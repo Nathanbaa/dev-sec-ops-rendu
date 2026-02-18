@@ -1,0 +1,120 @@
+### API DevSecOps - Tests (auth JWT)
+### Extension VSCode : REST Client (humao.rest-client)
+### 1) Login pour obtenir un token, 2) Utiliser le token dans les requêtes protégées si besoin
+
+@baseUrl = http://localhost:3000
+
+###############################################################################
+# 1. Health Check
+###############################################################################
+
+### GET Health Check
+GET {{baseUrl}}/api/health
+
+###############################################################################
+# 2. Login (JWT) - récupérer le token
+###############################################################################
+
+### POST Login - Admin (réponse contient token JWT)
+# @name login
+POST {{baseUrl}}/api/auth/login
+Content-Type: application/json
+
+{
+  "username": "admin",
+  "password": "admin123"
+}
+
+### POST Login - User
+POST {{baseUrl}}/api/auth/login
+Content-Type: application/json
+
+{
+  "username": "user",
+  "password": "password"
+}
+
+### POST Login - Credentials invalides (doit échouer)
+POST {{baseUrl}}/api/auth/login
+Content-Type: application/json
+
+{
+  "username": "admin",
+  "password": "wrong"
+}
+
+### POST Login - SQL Injection tente (doit échouer, pas de bypass)
+POST {{baseUrl}}/api/auth/login
+Content-Type: application/json
+
+{
+  "username": "admin' OR '1'='1",
+  "password": "test"
+}
+
+###############################################################################
+# 3. Files (path sécurisé, pas de traversal)
+###############################################################################
+
+### GET File - Légitime
+GET {{baseUrl}}/api/files?name=document.pdf
+
+### GET File - Légitime
+GET {{baseUrl}}/api/files?name=photo.jpg
+
+### GET File - Path traversal (doit être refusé 400/403)
+GET {{baseUrl}}/api/files?name=../package.json
+
+### GET File - Sans nom (400)
+GET {{baseUrl}}/api/files
+
+###############################################################################
+# 4. Users (rôle forcé à 'user', validation email/password)
+###############################################################################
+
+### POST Create User - Normal (rôle ignoré, toujours 'user')
+POST {{baseUrl}}/api/users
+Content-Type: application/json
+
+{
+  "email": "newuser@example.com",
+  "password": "password8chars",
+  "role": "user"
+}
+
+### POST Create User - Tentative privilege escalation (role admin ignoré)
+POST {{baseUrl}}/api/users
+Content-Type: application/json
+
+{
+  "email": "other@example.com",
+  "password": "password8chars",
+  "role": "admin"
+}
+
+### POST Create User - Email invalide (400)
+POST {{baseUrl}}/api/users
+Content-Type: application/json
+
+{
+  "email": "pas-un-email",
+  "password": "short",
+  "role": "admin"
+}
+
+### POST Create User - Mot de passe trop court (400)
+POST {{baseUrl}}/api/users
+Content-Type: application/json
+
+{
+  "email": "valid@example.com",
+  "password": "short",
+  "role": "user"
+}
+
+###############################################################################
+# 5. Documentation
+###############################################################################
+
+### GET Documentation
+GET {{baseUrl}}/

@@ -1,0 +1,1 @@
+echo "const AWS_KEY = 'FZFZEFZEFEZFZEXEMPLE';"

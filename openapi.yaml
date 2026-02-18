@@ -1,0 +1,68 @@
+openapi: 3.0.3
+info:
+  title: DevSecOps API
+  version: 1.0.0
+servers:
+  - url: http://localhost:3000
+paths:
+  /api/health:
+    get:
+      summary: Health check
+      responses:
+        "200":
+          description: OK
+  /api/auth/login:
+    post:
+      summary: Login (JWT)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [username, password]
+              properties:
+                username: { type: string }
+                password: { type: string }
+      responses:
+        "200":
+          description: Success with token
+        "401":
+          description: Invalid credentials
+  /api/files:
+    get:
+      summary: Get file by name
+      parameters:
+        - name: name
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: File content
+        "400":
+          description: Invalid file name
+        "404":
+          description: File not found
+  /api/users:
+    post:
+      summary: Create user (role forced to user)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email: { type: string, format: email }
+                password: { type: string, minLength: 8 }
+                role: { type: string }
+      responses:
+        "201":
+          description: Created
+        "400":
+          description: Validation error
+        "409":
+          description: Email already exists

@@ -1,0 +1,153 @@
+# Pipeline DevSecOps - Cycle de vie du code (cf. slide J2 matin, slide 22)
+# Chaque étape exécute les validations nécessaires pour la phase concernée.
+
+version: "3"
+
+vars:
+  IMAGE_NAME: "devsecops-api"
+  IMAGE_VERSION: "0.0.1"
+  SONAR_HOST: '{{.SONAR_HOST | default "http://localhost:9000"}}'
+  APP_URL: '{{.APP_URL | default "http://localhost:3000"}}'
+
+dotenv: [".env"]
+
+tasks:
+  # ========== Steps de base (réutilisés par les phases) ==========
+
+  0-lint:
+    desc: "0 - Linter (ESLint)"
+    cmds:
+      - npm run lint
+
+  1-compile:
+    desc: "1 - Vérification syntaxe / compile"
+    cmds:
+      - node --check src/server.js
+
+  2-build:
+    desc: "2 - Build image Docker"
+    deps: [npm-install]
+    cmds:
+      - docker build -t {{.IMAGE_NAME}}:{{.IMAGE_VERSION}} .
+
+  3-test:
+    desc: "3 - Tests unitaires (dont sécurité)"
+    deps: [npm-install]
+    cmds:
+      - npm run test
+
+  deps-scan:
+    desc: "Scan dépendances (npm audit)"
+    cmds:
+      - npm audit --audit-level=high || true
+
+  sonar-scan:
+    desc: "Analyse SonarQube (quality gate = fail si erreur)"
+    cmds:
+      - ./scripts/sonar-scan.sh {{.SONAR_HOST}} {{.SONAR_TOKEN}}
+    preconditions:
+      - test -n "{{.SONAR_TOKEN}}"
+      - sh -c "curl -sf {{.SONAR_HOST}}/api/system/status >/dev/null 2>&1 || (echo 'Démarrer SonarQube: task sonarqube-up' && exit 1)"
+
+  trivy-scan:
+    desc: "Scan Trivy image Docker"
+    deps: [2-build]
+    cmds:
+      - trivy image --exit-code 1 --severity HIGH,CRITICAL {{.IMAGE_NAME}}:{{.IMAGE_VERSION}} || true
+
+  owasp-zap:
+    desc: "OWASP ZAP DAST (app + openapi.yaml)"
+    cmds:
+      - docker run --rm --network host -v $(pwd):/zap/wrk -t owasp/zap2docker-stable zap-api-scan.py -t {{.APP_URL}}/openapi.yaml -f openapi -r zap-report.html -I || true
+
+  npm-install:
+    desc: "Installation dépendances"
+    cmds:
+      - npm ci
+
+  sonarqube-up:
+    desc: "Démarrer SonarQube (Docker Compose)"
+    cmds:
+      - docker-compose -f docker-compose-sq.yml up -d
+      - echo "SonarQube disponible - Attendre ~1 min avant sonar-scan"
+
+  sonarqube-down:
+    desc: "Arrêter SonarQube"
+    cmds:
+      - docker-compose -f docker-compose-sq.yml down
+
+  # ========== Phases du cycle de vie (slide J2 matin - slide 22) ==========
+
+  pre-commit:
+    desc: "Phase pré-commit : lint + tests (validation rapide avant commit)"
+    deps: [npm-install]
+    cmds:
+      - task: 0-lint
+      - task: 3-test
+
+  branch-feature:
+    desc: "Phase branch-feature : validation sur branche de feature (lint, test, build)"
+    deps: [npm-install]
+    cmds:
+      - task: 0-lint
+      - task: 1-compile
+      - task: 3-test
+      - task: 2-build
+
+  pull-request:
+    desc: "Phase Pull Request : qualité + sécurité (lint, test, build, sonar, trivy)"
+    cmds:
+      - task: 0-lint
+      - task: 1-compile
+      - task: 2-build
+      - task: 3-test
+      - task: deps-scan
+      - task: sonar-scan
+      - task: trivy-scan
+
+  staging:
+    desc: "Phase Staging : déploiement staging + validations (build, tests, scan deps)"
+    cmds:
+      - task: 0-lint
+      - task: 1-compile
+      - task: 2-build
+      - task: 3-test
+      - task: deps-scan
+      - task: trivy-scan
+
+  production:
+    desc: "Phase Production : pipeline complet avant déploiement prod (toutes validations)"
+    cmds:
+      - task: 0-lint
+      - task: 1-compile
+      - task: 2-build
+      - task: 3-test
+      - task: deps-scan
+      - task: sonar-scan
+      - task: trivy-scan
+
+  nightly:
+    desc: "Phase Nightly : analyses longues (SonarQube, Trivy, OWASP ZAP)"
+    cmds:
+      - task: 2-build
+      - task: sonar-scan
+      - task: trivy-scan
+      - task: owasp-zap
+
+  # ========== Raccourcis ==========
+
+  ci:
+    desc: "Pipeline CI complet (équivalent pull-request)"
+    cmds:
+      - task: pull-request
+
+  push:
+    desc: "Pipeline complet puis git push (avec SONAR_TOKEN)"
+    cmds:
+      - task: pull-request
+      - git push
+
+  default:
+    desc: "Affiche les tâches disponibles"
+    cmds:
+      - task --list
