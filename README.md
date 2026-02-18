@@ -14,6 +14,7 @@ API REST sécurisée (JWT, requêtes préparées, validation) conçue pour un us
 - [Tests](#tests)
 - [CI/CD (Taskfile)](#cicd-taskfile)
 - [Sécurité](#sécurité)
+- [État de l’audit npm](#état-de-laudit-npm)
 - [Ressources](#ressources)
 - [Licence](#licence)
 - [Conformité au sujet](#conformité-au-sujet)
@@ -189,6 +190,12 @@ Mesures mises en place dans cette version :
 - **Utilisateurs :** Requêtes préparées, rôle forcé à `user`, validation (express-validator), pas d’exposition de stack trace en production.
 - **Configuration :** Secrets et configuration via variables d’environnement (pas de mots de passe en dur en production).
 - **Logs :** Winston avec rotation ; en production les logs sont aussi envoyés sur la sortie standard pour une collecte dans Docker.
+
+---
+
+## État de l’audit npm
+
+`npm audit` peut afficher des vulnérabilités dans des **devDependencies** (ESLint, nodemon, etc.). Elles ne sont pas utilisées en production (l’image Docker n’installe que les dépendances de prod). Les dépendances de production (express, etc.) ont été mises à jour. Les alertes restantes n’ont pas été traitées par manque de temps (migration ESLint 9 nécessaire, impact sur le lint).
 
 ---
 
