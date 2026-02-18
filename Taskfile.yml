@@ -36,6 +36,7 @@ tasks:
     cmds:
       - npm run test
 
+  # npm audit : vulnérabilités restantes en devDependencies, non traitées (manque de temps).
   deps-scan:
     desc: "Scan dépendances (npm audit)"
     cmds:
